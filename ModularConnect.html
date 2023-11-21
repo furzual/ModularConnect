@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title></title>
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="" />
+    <!-- CSS only -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx"
+      crossorigin="anonymous"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" integrity="sha512-E8QSvWZ0eCLGk4km3hxSsNmGWbLtSCSUcewDQPQWZF6pEU8GlT8a5fF32wOl1i8ftdMhssTrF/OhyGWwonTcXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  </head>
+
+  <body class="container">
+    <h1>Connect Tool</h1>
+
+    <h2>AddParams</h2>
+    <p>En esta sección podemos agregar parametros adicionales a una venta directa, ejemplos de parametros validos son: </p>
+    <p>oid, [installmentsInterest, numberOfInstallments], assignToken, hosteddataid,[ponumber,recurringInstallmentCount,recurringInstallmentPeriod,recurringInstallmentFrequency,recurringComments], customParam_color</p>
+    <div class="input-group mb-3">
+      <span class="input-group-text" >ParamName</span>
+      <input type="text" class="form-control" id = "inputParamName">
+      <span class="input-group-text" >ParamValue</span>
+      <input type="text" class="form-control" id = "inputParamValue">
+    </div>
+    <div class="col-12">
+        <button class="btn btn-success" id="addParameter" type="button" onclick="addParameter(inputParams,'inputForm')">Add Parameter</button>
+    </div>
+
+    <h2>InputForm</h2>
+    <p>En esta sección podemos modificar los valores de los parametros agregados</p>
+    <form id="inputForm" class="container">
+    <!-- Here we render the inputs dinamically   -->
+    </form>
+
+    <div class="col-12">
+      <button class="btn btn-primary" id="calculate" onclick ="calculateForm(inputParams)"type="button">Calcular hash y formulario</button>
+    </div>
+
+    <h2>Results</h2>
+    <div class="container">
+      <p>**Si el parametro txndatetime esta vacío se calcula</p>
+      <div class="row"><span><b>Calculated date-time:</b> <span id = "dateResult"></span></span></div>
+      <div class="row"><span><b>CalculatedString : </b><span id = "stringResult"></span></span></div>
+      <div class="row"><span><b>CalculatedHash : </b><span id = "hashResult"></span></span></div>
+      <div class="row"><span><b>Base64Hash : </b><span id = "b64Result"></span></span></div>
+      <div class="row"><span><b>Resulting Form : </b></span></div>
+      <div class="row"><span id = "resultForm"></span></div>
+      <div id="htmlForm"></div>
+    </div>
+
+    <script>
+        //Connect initial parametersNames:values
+        let inputParams ={
+            "urlAction":"https://test.ipg-online.com/connect/gateway/processing",
+            "chargetotal":"666.00",
+            "checkoutoption":"combinedpage",
+            "currency":"484",
+            "hash_algorithm":"HMACSHA256",
+            "responseFailURL":"https://pagosonline.mx/DConnect/response.php",
+            "responseSuccessURL":"https://pagosonline.mx/DConnect/response.php",
+            "storename":"62666666",
+            "timezone":"America/Mexico_City",
+            "txndatetime":"",
+            "txntype":"sale",
+            "sharedSecret":"i88E-;KYkS"
+        }
+
+        function renderInputParams(inputParams,targetContainerID){
+            // Recieves a JSON of params and appends html input to target container
+
+            const container = document.getElementById(targetContainerID)
+
+            container.innerHTML = ""
+            
+            for (const key in inputParams){
+
+                let template = `
+                <div class="input-group mb-3">
+                    <span class="input-group-text" >${key}</span>
+                    <input type="text" name ="${key}"class="form-control" value="${inputParams[key]}" >
+                </div>
+                `
+                container.insertAdjacentHTML( 'beforeend', template ); 
+            }
+        }
+
+        function addParameter(inputParams,targetContainerID){
+            // Adds a new parameter to the Json and renders it in targetConatiner
+            const paramName = document.getElementById("inputParamName").value
+            const paramValue = document.getElementById("inputParamValue").value
+
+            if (paramName!="") inputParams[paramName] = paramValue
+
+            renderInputParams(inputParams,targetContainerID)
+        }
+
+        function setTodayFormatedDate(inputParams){
+            //Sets today's date in Connect format in the JSON and returns a string 
+            const d = new Date()
+            let datestring = 
+            d.getFullYear() + ":" +("0"+(d.getMonth()+1)).slice(-2)+ ":" + ("0" + d.getDate()).slice(-2) + "-" +
+            ("0" + d.getHours()).slice(-2)+ ":"+("0" + d.getMinutes()).slice(-2)+":"+("0" + d.getSeconds()).slice(-2);
+            document.getElementById('dateResult').textContent = datestring
+
+            inputParams["txndatetime"] = datestring
+
+            return datestring
+        }
+
+        function sortObj(object){
+            //Sorts a Json by its keys
+            const ordered = Object.keys(object).sort().reduce(
+                (obj, key) => { 
+                    obj[key] = object[key];
+                    return obj;
+                }, 
+                {}
+            );
+            return ordered
+        }
+
+        function calculateStringHash(inputParams){
+            //Takes a json and calulates returns "values string" 
+            //In this string each value is separated by a | character and  ordered by their json key on ASCII desc order
+            const ordered = sortObj(inputParams)
+
+            let valuesArray = []
+            const paramsBlacklist = ["urlAction","sharedSecret","hashExtended"]
+
+            for( key in ordered){
+                //If key not in blacklist
+                if (!paramsBlacklist.includes(key)){
+                    valuesArray.push(ordered[key])
+                }
+            }
+
+            const strHash = valuesArray.join("|")
+            document.getElementById('stringResult').textContent = strHash
+            return strHash
+        }
+
+        function calculateHash (strToHash,inputParams) {
+            //Takes a string and hashing key from a json and returns a base64 encoded hash string
+            
+            //Hashing..
+            sharedSecret = inputParams["sharedSecret"]
+            hmacHashstring = CryptoJS.HmacSHA256(strToHash, sharedSecret).toString();
+            hmacHash = CryptoJS.HmacSHA256(strToHash, sharedSecret);
+            document.getElementById('hashResult').textContent = hmacHashstring
+            
+            //To B64
+            base64Hash = CryptoJS.enc.Base64.stringify(hmacHash);
+            document.getElementById('b64Result').textContent = base64Hash
+
+            inputParams["hashExtended"] = base64Hash
+
+            return base64Hash
+        }
+
+        function updateParams(inputParams){
+
+            for (key in inputParams){
+                element = document.querySelector(`[name="${key}"]`)
+                newValue = element.value
+                inputParams[key] = newValue
+            }
+        }
+
+        function renderConnectHTMLForm(inputParams,targetContainerID){
+            // Recieves a JSON of params and appends a Connect html form to the current document
+            
+            const container = document.getElementById(targetContainerID)
+            
+            container.innerHTML = ""
+            const paramsBlacklist = ["urlAction","sharedSecret"]
+            let innerHTML = `<form method="POST" id= "myForm" action="${inputParams["urlAction"]}">`
+            
+            for (const key in inputParams){
+
+                if(!paramsBlacklist.includes(key)){
+                    let template = `<input type="hidden" name=${key} value="${inputParams[key]}" />`
+                    innerHTML += template
+                }
+                
+            }
+
+            innerHTML += `<input type=submit value="Send Form"class="btn btn-primary"/></form>`
+
+            document.getElementById('resultForm').textContent = innerHTML
+            document.getElementById(targetContainerID).innerHTML = innerHTML
+        }
+
+
+        //-- MAIN FUNCTION --
+        function calculateForm (inputParams){
+            //Master Connect process
+            updateParams(inputParams)
+
+            //Getting date from input or calculating...
+            let date = document.querySelector('[name="txndatetime"]').value
+            if(date == "") date = setTodayFormatedDate(inputParams)
+            //Setting date
+            inputParams["txndatetime"] = date
+
+            //Calculating stringTohash
+            let strHash = calculateStringHash(inputParams)
+            //Calculating base64
+            let base64Hash = calculateHash (strHash,inputParams)
+
+            
+            // Creating Connect HTML
+            renderConnectHTMLForm(inputParams,"htmlForm")
+            
+        }
+
+        // On document Ready
+        document.addEventListener("DOMContentLoaded", function(event) {
+
+            renderInputParams(inputParams,"inputForm");
+        });
+    </script>
+  </body
+</html>
